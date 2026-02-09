@@ -1,0 +1,12 @@
+{
+  "name": "joplin-skill",
+  "version": "1.0.0",
+  "description": "Joplin REST API skill for pi agent",
+  "type": "commonjs",
+  "main": "joplin.js",
+  "bin": {
+    "joplin": "./joplin.js"
+  },
+  "keywords": ["joplin", "notes", "api", "pi-skill"],
+  "license": "MIT"
+}
