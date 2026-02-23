@@ -1,314 +1,160 @@
 ---
 name: oldmbp-chrome
-description: Access and control Chrome browser running on oldmbp.lnet via SSH tunnel and Chrome DevTools Protocol. Provides remote browser automation, tab management, and web scraping capabilities.
+description: Manage Chrome remote debugging on oldmbp.lnet and use browser-tools with its IP address. Chrome runs on port 9222 via launchctl and is exposed via socat.
 ---
 
-# oldmbp-chrome Skill
+# Old MacBook Pro Chrome Remote Debugging
 
-Access and control Chrome browser running on oldmbp.lnet via SSH tunnel and Chrome DevTools Protocol.
+Chrome remote debugging instance running on `oldmbp.lnet` (192.168.2.4) with CDP exposed on port 9222.
 
-## Overview
+## Chrome Instance Details
 
-This skill provides access to a Chrome browser instance running on `oldmbp.lnet` (a remote Mac). Chrome is started with remote debugging enabled on port 9222, and an SSH tunnel proxies this port to localhost.
+- **Host**: oldmbp.lnet (192.168.2.4)
+- **Port**: 9222
+- **Managed by**: launchctl (`com.user.chrome-remote`)
+- **Profile**: ~/Desktop/chrome-profile
+- **Access via**: socat forwarding
 
-## Location
+## Start Chrome
 
-**Skill directory:** `~/.pi/agent/skills/oldmbp-chrome/`
-
-**Main script:** `~/.pi/agent/skills/oldmbp-chrome/oldmbp_chrome.py`
-
-## Features
-
-- Start/stop Chrome browser on oldmbp remotely
-- Automatic SSH tunnel management
-- Open URLs in new tabs
-- List and manage tabs
-- Execute JavaScript in tabs
-- Access Chrome DevTools for debugging
-
-## Quick Start
+Chrome is managed via launchctl. To trigger a start:
 
 ```bash
-# Navigate to skill directory
-cd ~/.pi/agent/skills/oldmbp-chrome/
+ssh oldmbp.lnet 'touch /tmp/start-chrome'
+```
 
-# Start Chrome on oldmbp (headfull mode - visible window)
-# Uses your default Chrome profile for human-like browsing
-# No --no-sandbox or --disable-gpu by default for natural behavior
-./oldmbp_chrome.py --start
+This signals the launchctl service to start Chrome with these flags:
+- `--remote-debugging-port=9222`
+- `--user-data-dir="$HOME/Desktop/chrome-profile"`
 
-# Or use a specific profile (e.g., for automation)
-./oldmbp_chrome.py --start --profile "~/Library/Application Support/Google/Chrome/Automation"
+## Stop Chrome
 
-# Or start in headless mode
-./oldmbp_chrome.py --start --headless
+```bash
+ssh oldmbp.lnet 'pkill -9 "Google Chrome"'
+```
 
-# If you need compatibility flags (for problematic environments)
-./oldmbp_chrome.py --start --no-sandbox       # for remote/root scenarios
-./oldmbp_chrome.py --start --disable-gpu      # for software rendering issues
+Or stop the launchctl service:
+```bash
+ssh oldmbp.lnet 'launchctl unload ~/Library/LaunchAgents/com.user.chrome-remote.plist'
+```
 
+## Check Status
+
+```bash
+# Check if Chrome is running
+ssh oldmbp.lnet 'pgrep -f "Google Chrome" | head -1'
+
+# Check CDP endpoint
+curl -s http://192.168.2.4:9222/json/version
+```
+
+## Browser Tools for oldmbp.lnet
+
+Modified versions of browser-tools that connect directly to oldmbp.lnet's Chrome instance (192.168.2.4:9222).
+
+### Setup
+
+```bash
+cd ~/.pi/agent/skills/my-skills/oldmbp-chrome
+npm install puppeteer-core @mozilla/readability jsdom turndown turndown-plugin-gfm
+```
+
+### Available Commands
+
+All scripts connect to `http://192.168.2.4:9222` automatically.
+
+#### Navigate
+```bash
+~/.pi/agent/skills/my-skills/oldmbp-chrome/oldmbp-nav.js https://example.com
+~/.pi/agent/skills/my-skills/oldmbp-chrome/oldmbp-nav.js https://example.com --new
+```
+
+#### Execute JavaScript
+```bash
+~/.pi/agent/skills/my-skills/oldmbp-chrome/oldmbp-eval.js 'document.title'
+~/.pi/agent/skills/my-skills/oldmbp-chrome/oldmbp-eval.js 'document.querySelectorAll("a").length'
+```
+
+#### Screenshot
+```bash
+~/.pi/agent/skills/my-skills/oldmbp-chrome/oldmbp-screenshot.js
+# Returns: /tmp/screenshot-2024-... .png
+```
+
+#### Pick Elements
+```bash
+~/.pi/agent/skills/my-skills/oldmbp-chrome/oldmbp-pick.js "Click the submit button"
+```
+
+#### Cookies
+```bash
+~/.pi/agent/skills/my-skills/oldmbp-chrome/oldmbp-cookies.js
+```
+
+#### Extract Content
+```bash
+~/.pi/agent/skills/my-skills/oldmbp-chrome/oldmbp-content.js https://example.com
+```
+
+### Get the WebSocket URL
+
+```bash
+# Get the CDP WebSocket URL
+~/.pi/agent/skills/my-skills/oldmbp-chrome/oldmbp-browser.sh ws
+# Output: ws://192.168.2.4:9222/devtools/browser/...
+```
+
+## CDP Endpoints
+
+| Endpoint | URL |
+|----------|-----|
+| Version | http://192.168.2.4:9222/json/version |
+| List tabs | http://192.168.2.4:9222/json/list |
+| New tab | http://192.168.2.4:9222/json/new |
+
+## Quick Helper Script
+
+A convenience script is included for common operations:
+
+```bash
 # Check status
-./oldmbp_chrome.py --status
+~/.pi/agent/skills/my-skills/oldmbp-chrome/oldmbp-browser.sh status
 
-# Open a URL
-./oldmbp_chrome.py --open "https://www.rail.co.il"
+# Get resolved IP
+~/.pi/agent/skills/my-skills/oldmbp-chrome/oldmbp-browser.sh ip
 
-# Execute JavaScript
-./oldmbp_chrome.py --js "document.title"
+# Start/stop Chrome
+~/.pi/agent/skills/my-skills/oldmbp-chrome/oldmbp-browser.sh start
+~/.pi/agent/skills/my-skills/oldmbp-chrome/oldmbp-browser.sh stop
 
-# When done, kill Chrome
-./oldmbp_chrome.py --kill
-```
-
-## Commands
-
-### Browser Control
-```bash
-./oldmbp_chrome.py --start              # Start Chrome (natural behavior, uses your profile)
-./oldmbp_chrome.py --start --headless   # Start Chrome (headless)
-./oldmbp_chrome.py --start --no-sandbox # Start with sandbox disabled (for remote debugging)
-./oldmbp_chrome.py --start --disable-gpu # Start with GPU disabled (for problematic envs)
-./oldmbp_chrome.py --kill               # Kill Chrome browser
-```
-
-### Tab Operations
-```bash
-./oldmbp_chrome.py --status             # Show connection status
-./oldmbp_chrome.py --list               # List all tabs
-./oldmbp_chrome.py --open "https://..." # Open URL in new tab
-./oldmbp_chrome.py --close-tab <id>     # Close specific tab
-./oldmbp_chrome.py --close-all          # Close all tabs except first
-```
-
-### JavaScript Execution
-```bash
-./oldmbp_chrome.py --js "document.title"                    # Get page title
-./oldmbp_chrome.py -j "document.querySelector('h1').innerText" # Get h1 text
-./oldmbp_chrome.py --js "..." --tab <id>                     # Run in specific tab
-```
-
-### Advanced Options
-```bash
-./oldmbp_chrome.py -p 9223 --start      # Use different local port
-./oldmbp_chrome.py --profile "~/Library/Application Support/Google/Chrome/MyProfile" --start  # Use specific Chrome profile
-./oldmbp_chrome.py --open "..." --no-activate  # Don't focus tab
-```
-
-## Direct Chrome DevTools Protocol Usage
-
-### Endpoints
-
-Base URL: `http://localhost:9222`
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/json/version` | GET | Chrome version info |
-| `/json/list` | GET | List all tabs/pages |
-| `/json/new?<url>` | PUT | Open new tab |
-| `/json/activate/<id>` | PUT | Focus a tab |
-| `/json/close/<id>` | PUT | Close a tab |
-
-### Examples
-
-```bash
-# Get Chrome version
-curl -s http://localhost:9222/json/version
-
-# List tabs
-curl -s http://localhost:9222/json/list
-
-# Open new tab
-curl -X PUT "http://localhost:9222/json/new?https://rail.co.il"
-
-# Open DevTools
-open "http://localhost:9222/devtools/inspector.html"
-```
-
-## Python API
-
-```python
-# Add skill directory to path or import directly
-import sys
-sys.path.insert(0, '~/.pi/agent/skills/oldmbp-chrome')
-
-from oldmbp_chrome import OldmbpChrome
-
-chrome = OldmbpChrome()
-
-# Check if Chrome is running on oldmbp
-if chrome.is_chrome_running():
-    print("Chrome is running")
-
-# Start Chrome (optionally in headless mode)
-chrome.start_chrome(headless=False)
-
-# Ensure tunnel is active
-if chrome.ensure_tunnel():
-    # Open URL
-    tab = chrome.open_url("https://rail.co.il")
-    print(f"Opened tab: {tab.id}")
-    
-    # List all tabs
-    for tab in chrome.list_tabs():
-        print(f"{tab.title}: {tab.url}")
-    
-    # Execute JavaScript
-    success, result = chrome.eval_js("document.title")
-    if success:
-        print(f"Page title: {result}")
-    
-    # Execute in specific tab
-    success, result = chrome.eval_js("document.title", tab_id="abc123")
-    
-    # Close a tab
-    chrome.close_tab(tab.id)
-
-# When done, kill Chrome
-chrome.kill_chrome()
-```
-
-## Use Cases
-
-### Israel Railways Schedule Lookup
-
-```bash
-# Start Chrome
-./oldmbp_chrome.py --start
-
-# Open rail.co.il planner with specific route
-./oldmbp_chrome.py --open "https://www.rail.co.il/en/pages/trainsearch.aspx?fromStation=3700&toStation=5400&scheduleType=1"
-
-# Check status
-./oldmbp_chrome.py --status
-```
-
-### Execute JavaScript / Scrape Data
-
-```bash
-# Open a website
-./oldmbp_chrome.py --open "https://example.com"
-
-# Get page title
-./oldmbp_chrome.py --js "document.title"
-
-# Get all links
-./oldmbp_chrome.py --js "Array.from(document.querySelectorAll('a')).map(a => a.href)"
-
-# Open Reddit and get post titles
-./oldmbp_chrome.py --open "https://www.reddit.com"
-
-# Scroll to load more content, then get posts
-./oldmbp_chrome.py --js "window.scrollBy(0, 2000)"
-./oldmbp_chrome.py --js "Array.from(document.querySelectorAll('shreddit-post')).slice(0,10).map(p => p.getAttribute('post-title'))"
-
-# Run in a specific tab
-./oldmbp_chrome.py --list  # Get tab ID
-./oldmbp_chrome.py --js "document.title" --tab <tab_id>
-```
-
-### Automated Web Scraping
-
-```python
-import sys
-sys.path.insert(0, '~/.pi/agent/skills/custom/oldmbp-chrome')
-from oldmbp_chrome import OldmbpChrome
-
-chrome = OldmbpChrome()
-
-# Ensure Chrome is running
-if not chrome.is_chrome_running():
-    chrome.start_chrome(headless=True)  # Headless for scraping
-
-chrome.ensure_tunnel()
-
-# Open target page
-chrome.open_url("https://example.com")
-
-# Extract data via CDP WebSocket or DevTools
-# (Use the webSocketDebuggerUrl from tab info)
+# Get WebSocket URL for CDP connection
+~/.pi/agent/skills/my-skills/oldmbp-chrome/oldmbp-browser.sh ws
 ```
 
 ## Troubleshooting
 
-### Connection Refused
+### "Host header is specified and is not an IP address or localhost"
 
-1. Check if Chrome is running and SSH tunnel is active:
-   ```bash
-   ./oldmbp_chrome.py --status
-   ```
-
-2. Manually restart tunnel:
-   ```bash
-   pkill -f "ssh.*L 9222"
-   ssh -f -N -L 9222:localhost:9222 garciamax@oldmbp.lnet
-   ```
-
-### Chrome Won't Start
-
-1. Check if Chrome is already running:
-   ```bash
-   ./oldmbp_chrome.py --status
-   ```
-
-2. Kill and restart:
-   ```bash
-   ./oldmbp_chrome.py --kill
-   ./oldmbp_chrome.py --start
-   ```
-
-3. Start manually on oldmbp:
-   ```bash
-   ssh garciamax@oldmbp.lnet
-   /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome \
-     --remote-debugging-port=9222 \
-     --user-data-dir="$HOME/Library/Application Support/Google/Chrome/Default" &
-   ```
-
-### Chrome Process Hanging
-
-If Chrome becomes unresponsive:
+Chrome rejects requests with non-localhost Host headers. Solutions:
 
 ```bash
-# Force kill on oldmbp
-ssh garciamax@oldmbp.lnet 'pkill -9 -f "Google Chrome"'
+# Use IP address
+curl -s http://192.168.2.4:9222/json/version
 
-# Then restart
-./oldmbp_chrome.py --start
+# Or use empty Host header
+curl -s -H "Host:" http://oldmbp.lnet:9222/json/version
 ```
 
-## Security Notes
+### Chrome not responding
 
-- The SSH tunnel uses local port forwarding only (localhost:9222)
-- Chrome runs with normal sandbox by default (more secure)
-- Use `--no-sandbox` only when needed for remote debugging
-- Use `--disable-gpu` only for problematic environments
-- Chrome uses your actual user profile by default (cookies, history, etc.)
-- Only use on trusted networks
-- Anyone with access to localhost:9222 can control the browser
-- Consider using a dedicated profile for automation if you manually use Chrome on oldmbp
+1. Check if Chrome process exists: `ssh oldmbp.lnet 'pgrep Chrome'`
+2. Check launchctl service: `ssh oldmbp.lnet 'launchctl list | grep chrome'`
+3. View logs: `ssh oldmbp.lnet 'cat /tmp/chrome-remote.log'`
+4. Trigger restart: `ssh oldmbp.lnet 'pkill Chrome; sleep 2; touch /tmp/start-chrome'`
 
-## Configuration
+## Configuration Files
 
-Default settings in `oldmbp_chrome.py`:
-- Remote host: `oldmbp.lnet`
-- Remote user: `garciamax`
-- Debug port: `9222`
-- Chrome path: `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`
-- Local tunnel port: `9222`
-- Chrome user data dir: `~/Library/Application Support/Google/Chrome/Default` (your actual Chrome profile!)
-
-**Note:** By default, Chrome uses your actual browser profile, giving you:
-- Logged-in sessions (cookies preserved)
-- Browser history
-- Saved passwords and autofill
-- Extensions
-- Bookmarks
-- All custom settings
-
-This makes automated browsing feel exactly like you were using Chrome manually.
-
-## Related Files
-
-- `~/.pi/agent/skills/oldmbp-chrome/oldmbp_chrome.py` - Main wrapper script
-- `~/.pi/agent/skills/oldmbp-chrome/eval_js.py` - Helper for JavaScript execution
-- `~/.pi/agent/skills/oldmbp-chrome/SKILL.md` - This documentation
+On oldmbp.lnet:
+- LaunchAgent: `~/Library/LaunchAgents/com.user.chrome-remote.plist`
+- Chrome profile: `~/Desktop/chrome-profile`
+- Logs: `/tmp/chrome-remote.log`, `/tmp/chrome-remote.error`

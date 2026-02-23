@@ -1,0 +1,6 @@
+{
+  "name": "oldmbp-chrome-tools",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Browser tools for oldmbp.lnet Chrome remote debugging"
+}
